@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# location of tabview install, under the bin/ dir
+tabview_dir=tabview-1.4.4
+
+# directory of this script
+dir=$(dirname $0)
+
+# set PYTHONPATH so that we can find the tabview libs
+export PYTHONPATH=${dir}/$tabview_dir
+
+# run tabview
+for f in "$@";
+do
+    ${dir}/${tabview_dir}/bin/tabview "$f"
+done

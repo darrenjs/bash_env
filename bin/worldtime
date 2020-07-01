@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+
+# Script to convert between timezones
+
+# To add new timezones, add to this list a value entry from
+# /usr/share/zoneinfo. Arrange the timezones in order of increasing GMT offset.
+
+# NOTE: if you just want to find the local time in some other location, just run
+# tzselect
+
+timezones=(Europe/London Europe/Paris America/Chicago America/New_York Asia/Calcutta Asia/Hong_Kong Asia/Shanghai  Asia/Tokyo    Australia/Sydney)
+
+# Determine if we should colorise output
+usecolor=1
+if [ "$1" == "--nocolor" ];
+then
+    usecolor=0
+    shift;
+fi
+
+# If the user has not provided a time on the command line, prompt for a time
+# value
+if [ -z "$1" ];
+then
+
+    echo "Time (e.g., 2pm, 09:43, or leave empty for current time):"
+    echo -ne ">> "
+    read usertime
+
+    if [ -z "$usertime" ];
+    then
+        usertime="now"
+        echo now
+    fi
+    echo
+else
+    usertime=$1
+fi
+
+# In usertz we will store the timezone to be used for the final time
+# conversions.  Our next task is to find out a value, either from the command
+# line args, or interactively.
+usertz="";
+
+# If there is a second arg, try to match that against supported timezones.
+if [ -n "$2" ]
+then
+    # convert to lowercase
+    userarglower=`echo "$2" |  tr '[:upper:]' '[:lower:]'`
+
+    i=$(( 0 ))
+    for item in ${timezones[*]}
+    do
+        # convert to lower
+        itemlc=`echo "$item" |  tr '[:upper:]' '[:lower:]'`
+
+        # perform regular expression matching, using expr. We don't use bash
+        # internal regex because we are using old version of bash in some places
+        # which doesn't support it.
+        exprval=`expr $itemlc : ".*${userarglower}.*"`
+
+        if [ "$exprval" != "0" ];
+        then
+            usertz=$item
+            break;
+        fi
+    done
+
+    # Failed to match user input
+    if [ -z "$usertz" ];
+    then
+        echo "$2 not recognised timezone"
+        exit 1
+    fi
+fi
+
+# If we don't have a timezone value then must prompt for it
+if [ -z "$usertz" ];
+then
+    i=$(( 0 ))
+    for item in ${timezones[*]}
+    do
+        printf "\t%d - %s\n" $i  $item
+        i=$(( i+1 ))
+    done
+
+    echo -ne ">> "
+    read c
+
+    usertz=${timezones[ $c ]}
+    if [ -z "$usertz" ];
+    then
+        echo "*** COMPUTER SAYS NO ***"
+        exit 1
+    fi
+
+    echo "------------------------------------------------------"
+fi
+
+# Get the time as an RFC-2822 compliant date string
+rfc2822time=`TZ=$usertz date --date="$usertime" -R`
+
+echo $usertime $usertz is:
+echo
+
+color="";
+evenrow=1
+for item in ${timezones[*]}
+do
+    if [ $item = "$usertz" ]; then mark=" <-"; else mark=""; fi
+
+    if [ $usecolor -ne 0 ]; then
+
+        # reset any colours
+        unset color
+        echo -ne "\e[0m"
+
+        if [ $evenrow -eq 0 ]; then
+            color="\033[1m"
+            color="\033[7;2m"
+        fi
+
+        if [ "$item" == 'America/Chicago' ]; then
+            if [ $evenrow -eq 0 ]; then
+                color="\033[33;7;1m"
+            else
+                color="\033[33;1m"
+            fi
+        fi
+
+        if [ "$item" == 'America/New_York' ]; then
+            if [ $evenrow -eq 0 ]; then
+                color="\033[31;7;1m"
+            else
+                color="\033[31;1m"
+            fi
+        fi
+
+        test -n "$color" && echo -ne "$color"
+    fi
+
+    targettime=`TZ=$item  date --date="$rfc2822time" +"%a %d %b %R:%S (%z)"`
+
+    printf "%-18s: %s%s\n"  $item "$targettime" "$mark"
+
+    ((evenrow ^= 1))
+done
+
+if [ "$usecolor" -ne 0 ]; then
+    if [ -t 1 ]; then
+        tput -Txterm sgr0
+    fi
+fi
